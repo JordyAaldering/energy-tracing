@@ -13,6 +13,7 @@ static RAPL: LazyLock<RaplReader> =
 static TRACE_EVENTS: LazyLock<Mutex<Vec<TraceEvent>>> =
     LazyLock::new(|| Mutex::new(Vec::new()));
 
+#[cfg(feature = "gap")]
 pub static GAP_SNAPSHOTS: LazyLock<Mutex<HashMap<&'static str, Snapshot>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -45,8 +46,10 @@ macro_rules! trace_region {
         let start = $crate::Snapshot::now();
 
         // Record gap since previous execution of this region
-        if let Some(last) = $crate::GAP_SNAPSHOTS.lock().unwrap().get($region).copied() {
-            $crate::record_segment(concat!("gap_", $region), last, start);
+        #[cfg(feature = "gap")] {
+            if let Some(last) = $crate::GAP_SNAPSHOTS.lock().unwrap().get($region).copied() {
+                $crate::record_segment(concat!("gap_", $region), last, start);
+            }
         }
 
         let result = { $block };
@@ -56,7 +59,9 @@ macro_rules! trace_region {
         $crate::record_segment($region, start, end);
 
         // Remember when this region last finished
-        $crate::GAP_SNAPSHOTS.lock().unwrap().insert($region, end);
+        #[cfg(feature = "gap")] {
+            $crate::GAP_SNAPSHOTS.lock().unwrap().insert($region, end);
+        }
 
         result
     }};
