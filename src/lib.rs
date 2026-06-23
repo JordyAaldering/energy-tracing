@@ -111,9 +111,9 @@ where
 {
     let traces = TRACE_EVENTS.lock().unwrap();
 
-    writeln!(w, "region,duration_ns,energy_uj").unwrap();
+    writeln!(w, "region,start_ns,duration_ns,energy_uj").unwrap();
     for trace in traces.iter() {
-        writeln!(w, "{},{},{}", trace.region, trace.duration_ns, trace.energy_uj).unwrap();
+        writeln!(w, "{},{},{},{}", trace.region, trace.start_ns, trace.duration_ns, trace.energy_uj).unwrap();
     }
 }
 

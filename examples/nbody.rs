@@ -69,8 +69,8 @@ fn shift_mut_ref<'a, T>(r: &mut &'a mut [T]) -> Option<&'a mut T> {
 }
 
 fn advance(bodies: &mut [Body; 5], dt: f64) {
-    for _ in 0..5000 {
-        trace_region!("timestep1000", { for _ in 0..1000 {
+    for _ in 0..1000 {
+        trace_region!("timestep", { for _ in 0..5000 {
             let mut b_slice: &mut [_] = bodies;
 
             loop {
@@ -164,6 +164,6 @@ fn main() {
 
     println!("{:.9}", trace_region!("mechanical_energy", { mechanical_energy(&bodies) }));
 
-    print_trace_events(&mut std::fs::File::create("target/output.csv").unwrap());
+    print_trace_events(&mut std::fs::File::create("target/nbody.csv").unwrap());
     print_trace_report(&mut std::io::stdout());
 }
