@@ -26,14 +26,14 @@ pub struct TraceEvent {
 
 #[derive(Clone, Copy)]
 pub struct Snapshot {
-    instant: Instant,
+    duration_ns: u64,
     energy_uj: u64,
 }
 
 impl Snapshot {
     pub fn now() -> Self {
         Self {
-            instant: std::time::Instant::now(),
+            duration_ns: Instant::now().duration_since(*START_TIME.get_or_init(Instant::now)).as_nanos() as u64,
             energy_uj: RAPL.read_energy_uj().unwrap(),
         }
     }
@@ -72,34 +72,12 @@ macro_rules! trace_region {
     }};
 }
 
-fn program_start() -> &'static Instant {
-    START_TIME.get_or_init(Instant::now)
-}
-
-pub fn now_ns() -> u64 {
-    let start = program_start();
-    start.elapsed().as_nanos() as u64
-}
-
-pub fn trace_start() -> u64 {
-    RAPL.read_energy_uj().unwrap()
-}
-
-pub fn trace_stop(previous: u64) -> u64 {
-    let current = RAPL.read_energy_uj().unwrap();
-    RAPL.delta_energy_uj(previous, current)
-}
-
 pub fn record_segment(region: &'static str, start: Snapshot, end: Snapshot) {
-    let program_start = *program_start();
-
-    let start_ns = start.instant.duration_since(program_start).as_nanos() as u64;
-    let duration_ns = end.instant.duration_since(start.instant).as_nanos() as u64;
+    let duration_ns = end.duration_ns - start.duration_ns;
     let energy_uj = RAPL.delta_energy_uj(start.energy_uj, end.energy_uj);
-
     TRACE_EVENTS.lock().unwrap().push(TraceEvent {
         region,
-        start_ns,
+        start_ns: start.duration_ns,
         duration_ns,
         energy_uj,
     });
