@@ -1,4 +1,4 @@
-use std::{env, fs, io, thread, time::Duration};
+use std::{env, thread, time::Duration};
 
 use energy_tracing::*;
 

@@ -156,8 +156,6 @@ fn main() {
 
     println!("{:.9}", trace_region!("mechanical_energy", { mechanical_energy(&bodies) }));
 
-    std::thread::sleep(std::time::Duration::from_millis(50));
-
     trace_region!("advance", {
         advance(&mut bodies, 0.01);
     });
