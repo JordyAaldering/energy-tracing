@@ -1,6 +1,6 @@
 mod rapl;
 
-use std::{collections::HashMap, io, sync::{LazyLock, Mutex, OnceLock, atomic::AtomicUsize}, time::Instant};
+use std::{collections::HashMap, io, sync::{LazyLock, Mutex, OnceLock}, time::Instant};
 
 use crate::rapl::RaplReader;
 
@@ -10,10 +10,8 @@ pub static START_TIME: OnceLock<Instant> =
 pub static RAPL: LazyLock<RaplReader> =
     LazyLock::new(|| RaplReader::new("/sys/class/powercap/intel-rapl:0").unwrap());
 
-pub static ACTIVE_TRACES: AtomicUsize = AtomicUsize::new(0);
-
-pub static LAST_SNAPSHOT: LazyLock<Mutex<Option<Snapshot>>> =
-    LazyLock::new(|| Mutex::new(None));
+pub static LAST_REGION_SNAPSHOTS: LazyLock<Mutex<HashMap<&'static str, Snapshot>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub static TRACE_EVENTS: LazyLock<Mutex<Vec<TraceEvent>>> =
     LazyLock::new(|| Mutex::new(Vec::new()));
@@ -44,16 +42,17 @@ impl Snapshot {
 #[macro_export]
 macro_rules! trace_region {
     ($region:literal, $block:block) => {{
-        let previous_active_traces = $crate::ACTIVE_TRACES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
         let start = $crate::Snapshot::now();
 
-        // If LAST_SNAPSHOT exists, then since that snapshot was created no traces were run
-        // Note that we cannot just check that active_traces was 0, as that would break in the first iteration
-        if let Some(gap_start) = $crate::LAST_SNAPSHOT.lock().unwrap().take() {
-            debug_assert_eq!(previous_active_traces, 0);
-            let end = $crate::Snapshot::now();
-            $crate::record_segment("gap", gap_start, start);
+        // Record gap since previous execution of this region
+        if let Some(previous_end) = {
+            $crate::LAST_REGION_SNAPSHOTS
+                .lock()
+                .unwrap()
+                .get($region)
+                .copied()
+        } {
+            $crate::record_segment(concat!("gap_", $region), previous_end, start);
         }
 
         let result = { $block };
@@ -62,11 +61,12 @@ macro_rules! trace_region {
 
         $crate::record_segment($region, start, end);
 
-        // If number of active traces becomes 0 (previous value was 1), start the gap snapshot
-        if $crate::ACTIVE_TRACES.fetch_sub(1, std::sync::atomic::Ordering::Relaxed) == 1 {
-            let mut last = $crate::LAST_SNAPSHOT.lock().unwrap();
-            *last = Some(end);
-        }
+        // Remember when this region last finished
+        // This assumes regions with the same name are never nested
+        $crate::LAST_REGION_SNAPSHOTS
+            .lock()
+            .unwrap()
+            .insert($region, end);
 
         result
     }};
