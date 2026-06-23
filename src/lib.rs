@@ -44,27 +44,30 @@ impl Snapshot {
 macro_rules! trace_region {
     ($region:literal, $block:block) => {{
         let start = $crate::Snapshot::now();
-
-        // Record gap since previous execution of this region
-        #[cfg(feature = "gap")] {
-            if let Some(last) = $crate::GAP_SNAPSHOTS.lock().unwrap().get($region).copied() {
-                $crate::record_segment(concat!("gap_", $region), last, start);
-            }
-        }
+        $crate::record_gap($region, start);
 
         let result = { $block };
 
         let end = $crate::Snapshot::now();
-
         $crate::record_segment($region, start, end);
-
-        // Remember when this region last finished
-        #[cfg(feature = "gap")] {
-            $crate::GAP_SNAPSHOTS.lock().unwrap().insert($region, end);
-        }
+        $crate::remember_gap($region, end);
 
         result
     }};
+}
+
+#[allow(unused_variables)]
+pub fn record_gap(region: &'static str, start: Snapshot) {
+    #[cfg(feature = "gap")]
+    if let Some(last) = GAP_SNAPSHOTS.lock().unwrap().get(region).copied() {
+        record_segment(region, last, start);
+    }
+}
+
+#[allow(unused_variables)]
+pub fn remember_gap(region: &'static str, end: Snapshot) {
+    #[cfg(feature = "gap")]
+    GAP_SNAPSHOTS.lock().unwrap().insert(region, end);
 }
 
 pub fn record_segment(region: &'static str, start: Snapshot, end: Snapshot) {
