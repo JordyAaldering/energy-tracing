@@ -68,9 +68,9 @@ fn shift_mut_ref<'a, T>(r: &mut &'a mut [T]) -> Option<&'a mut T> {
     Some(&mut h[0])
 }
 
-fn advance(bodies: &mut [Body; 5], dt: f64, steps: i32) {
-    for _ in 0..steps {
-        trace_region!("timestep", {
+fn advance(bodies: &mut [Body; 5], dt: f64) {
+    for _ in 0..5000 {
+        trace_region!("timestep1000", { for _ in 0..1000 {
             let mut b_slice: &mut [_] = bodies;
 
             loop {
@@ -102,7 +102,7 @@ fn advance(bodies: &mut [Body; 5], dt: f64, steps: i32) {
                 bi.y += dt * bi.vy;
                 bi.z += dt * bi.vz;
             }
-        });
+        } });
     }
 }
 
@@ -159,11 +159,11 @@ fn main() {
     std::thread::sleep(std::time::Duration::from_millis(50));
 
     trace_region!("advance", {
-        advance(&mut bodies, 0.01, 50000);
+        advance(&mut bodies, 0.01);
     });
 
     println!("{:.9}", trace_region!("mechanical_energy", { mechanical_energy(&bodies) }));
 
-    print_trace_events();
-    print_trace_report();
+    print_trace_events(&mut std::fs::File::create("target/output.csv").unwrap());
+    print_trace_report(&mut std::io::stdout());
 }

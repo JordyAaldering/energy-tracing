@@ -1,6 +1,6 @@
 mod rapl;
 
-use std::{collections::HashMap, sync::{LazyLock, Mutex, OnceLock, atomic::AtomicUsize}, time::Instant};
+use std::{collections::HashMap, io, sync::{LazyLock, Mutex, OnceLock, atomic::AtomicUsize}, time::Instant};
 
 use crate::rapl::RaplReader;
 
@@ -20,7 +20,7 @@ pub static TRACE_EVENTS: LazyLock<Mutex<Vec<TraceEvent>>> =
 
 #[derive(Clone)]
 pub struct TraceEvent {
-    pub name: &'static str,
+    pub region: &'static str,
     pub start_ns: u64,
     pub duration_ns: u64,
     pub energy_uj: u64,
@@ -43,7 +43,7 @@ impl Snapshot {
 
 #[macro_export]
 macro_rules! trace_region {
-    ($name:literal, $block:block) => {{
+    ($region:literal, $block:block) => {{
         let previous_active_traces = $crate::ACTIVE_TRACES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let start = $crate::Snapshot::now();
@@ -53,14 +53,14 @@ macro_rules! trace_region {
         if let Some(gap_start) = $crate::LAST_SNAPSHOT.lock().unwrap().take() {
             debug_assert_eq!(previous_active_traces, 0);
             let end = $crate::Snapshot::now();
-            $crate::record_segment("_internal_gap", gap_start, start);
+            $crate::record_segment("gap", gap_start, start);
         }
 
         let result = { $block };
 
         let end = $crate::Snapshot::now();
 
-        $crate::record_segment($name, start, end);
+        $crate::record_segment($region, start, end);
 
         // If number of active traces becomes 0 (previous value was 1), start the gap snapshot
         if $crate::ACTIVE_TRACES.fetch_sub(1, std::sync::atomic::Ordering::Relaxed) == 1 {
@@ -90,7 +90,7 @@ pub fn trace_stop(previous: u64) -> u64 {
     RAPL.delta_energy_uj(previous, current)
 }
 
-pub fn record_segment(name: &'static str, start: Snapshot, end: Snapshot) {
+pub fn record_segment(region: &'static str, start: Snapshot, end: Snapshot) {
     let program_start = *program_start();
 
     let start_ns = start.instant.duration_since(program_start).as_nanos() as u64;
@@ -98,29 +98,36 @@ pub fn record_segment(name: &'static str, start: Snapshot, end: Snapshot) {
     let energy_uj = RAPL.delta_energy_uj(start.energy_uj, end.energy_uj);
 
     TRACE_EVENTS.lock().unwrap().push(TraceEvent {
-        name,
+        region,
         start_ns,
         duration_ns,
         energy_uj,
     });
 }
 
-pub fn print_trace_events() {
+pub fn print_trace_events<W>(w: &mut W)
+where
+    W: io::Write,
+{
     let traces = TRACE_EVENTS.lock().unwrap();
 
+    writeln!(w, "region,duration_ns,energy_uj").unwrap();
     for trace in traces.iter() {
-        println!("{},{},{}", trace.name, trace.duration_ns, trace.energy_uj)
+        writeln!(w, "{},{},{}", trace.region, trace.duration_ns, trace.energy_uj).unwrap();
     }
 }
 
-pub fn print_trace_report() {
+pub fn print_trace_report<W>(w: &mut W)
+where
+    W: io::Write,
+{
     let events = TRACE_EVENTS.lock().unwrap();
 
     let mut map: HashMap<&'static str, (u64, u64, u64)> = HashMap::new();
 
     for e in events.iter() {
         let entry = map
-            .entry(e.name)
+            .entry(e.region)
             .or_insert((0, 0, 0));
 
         entry.0 += 1;
@@ -131,20 +138,22 @@ pub fn print_trace_report() {
     let mut events = map.into_iter().collect::<Vec<_>>();
     events.sort_unstable_by_key(|e| e.0);
 
-    println!(
+    writeln!(
+        w,
         "{:<20} {:>10} {:>15} {:>15} {:>15} {:>15}",
-        "Name", "Calls", "Time (ms)", "Avg. Time", "Energy (mJ)", "Avg. Energy"
-    );
+        "Region", "Calls", "Time (ms)", "Avg. Time", "Energy (mJ)", "Avg. Energy"
+    ).unwrap();
 
-    for (name, (calls, duration_ns, energy_uj)) in events {
-        println!(
+    for (region, (calls, duration_ns, energy_uj)) in events {
+        writeln!(
+            w,
             "{:<20} {:>10} {:>15.3} {:>15.3} {:>15.3} {:>15.3}",
-            name,
+            region,
             calls,
             duration_ns as f64 / 1_000_000.0,
             (duration_ns as f64 / 1_000_000.0) / calls as f64,
             energy_uj as f64 / 1_000.0,
             (energy_uj as f64 / 1_000.0) / calls as f64,
-        );
+        ).unwrap();
     }
 }
