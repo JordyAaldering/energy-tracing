@@ -109,7 +109,7 @@ pub fn print_trace_events() {
     let traces = TRACE_EVENTS.lock().unwrap();
 
     for trace in traces.iter() {
-        println!("{:<10}: {:.3}ms {:.3}mJ", trace.name, trace.duration_ns as f64 / 1000.0, trace.energy_uj as f64 * 1000.0)
+        println!("{},{},{}", trace.name, trace.duration_ns, trace.energy_uj)
     }
 }
 

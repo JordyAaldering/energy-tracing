@@ -1,4 +1,4 @@
-use energy_tracing::{print_trace_report, trace_region};
+use energy_tracing::*;
 
 const PI: f64 = 3.141592653589793;
 const SOLAR_MASS: f64 = 4.0 * PI * PI;
@@ -164,5 +164,6 @@ fn main() {
 
     println!("{:.9}", trace_region!("mechanical_energy", { mechanical_energy(&bodies) }));
 
+    print_trace_events();
     print_trace_report();
 }
