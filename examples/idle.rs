@@ -18,6 +18,5 @@ fn main() {
         }
     });
 
-    print_trace_events(&mut fs::File::create(format!("target/idle_{}.csv", frequency_hz)).unwrap());
-    print_trace_report(&mut io::stdout());
+    write_traces(format!("target/idle_{}.csv", frequency_hz));
 }

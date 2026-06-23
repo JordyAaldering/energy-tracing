@@ -164,6 +164,5 @@ fn main() {
 
     println!("{:.9}", trace_region!("mechanical_energy", { mechanical_energy(&bodies) }));
 
-    print_trace_events(&mut std::fs::File::create("target/nbody.csv").unwrap());
-    print_trace_report(&mut std::io::stdout());
+    write_traces("target/nbody.csv");
 }

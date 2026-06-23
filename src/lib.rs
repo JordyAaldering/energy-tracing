@@ -1,6 +1,6 @@
 mod rapl;
 
-use std::{collections::HashMap, io, sync::{LazyLock, Mutex, OnceLock}, time::Instant};
+use std::{fs::File, io::{BufWriter, Write}, path::Path, sync::{LazyLock, Mutex, OnceLock}, time::Instant};
 
 use crate::rapl::RaplReader;
 
@@ -73,6 +73,7 @@ pub fn remember_gap(region: &'static str, end: Snapshot) {
 pub fn record_segment(region: &'static str, start: Snapshot, end: Snapshot) {
     let duration_ns = end.duration_ns - start.duration_ns;
     let energy_uj = RAPL.delta_energy_uj(start.energy_uj, end.energy_uj);
+
     TRACE_EVENTS.lock().unwrap().push(TraceEvent {
         region,
         start_ns: start.duration_ns,
@@ -81,51 +82,18 @@ pub fn record_segment(region: &'static str, start: Snapshot, end: Snapshot) {
     });
 }
 
-pub fn print_trace_events<W>(w: &mut W)
+pub fn write_traces<P>(path: P)
 where
-    W: io::Write,
+    P: AsRef<Path>,
 {
     let traces = TRACE_EVENTS.lock().unwrap();
+
+    let file = File::create(path).unwrap();
+    let mut w = BufWriter::new(file);
 
     writeln!(w, "region,start_ns,duration_ns,energy_uj").unwrap();
 
     for trace in traces.iter() {
         writeln!(w, "{},{},{},{}", trace.region, trace.start_ns, trace.duration_ns, trace.energy_uj).unwrap();
-    }
-}
-
-pub fn print_trace_report<W>(w: &mut W)
-where
-    W: io::Write,
-{
-    let events = TRACE_EVENTS.lock().unwrap();
-
-    let mut map: HashMap<&'static str, (u64, u64, u64)> = HashMap::new();
-    for e in events.iter() {
-        let entry = map
-            .entry(e.region)
-            .or_insert((0, 0, 0));
-
-        entry.0 += 1;
-        entry.1 += e.duration_ns;
-        entry.2 += e.energy_uj;
-    }
-
-    let mut events = map.into_iter().collect::<Vec<_>>();
-    events.sort_unstable_by_key(|e| e.0);
-
-    writeln!(w, "{:<20} {:>10} {:>15} {:>15} {:>15} {:>15}",
-        "Region", "Calls", "Time (ms)", "Avg. Time", "Energy (mJ)", "Avg. Energy",
-    ).unwrap();
-
-    for (region, (calls, duration_ns, energy_uj)) in events {
-        writeln!(w, "{:<20} {:>10} {:>15.3} {:>15.3} {:>15.3} {:>15.3}",
-            region,
-            calls,
-            duration_ns as f64 / 1_000_000.0,
-            (duration_ns as f64 / 1_000_000.0) / calls as f64,
-            energy_uj as f64 / 1_000.0,
-            (energy_uj as f64 / 1_000.0) / calls as f64,
-        ).unwrap();
     }
 }
