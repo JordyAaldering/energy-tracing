@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, io, os::unix::fs::FileExt, path::Path};
+use std::{fs::File, io, os::unix::fs::FileExt, path::Path};
 
 pub struct RaplReader {
     energy_file: File,
@@ -14,7 +14,7 @@ impl RaplReader {
         let energy_file = File::open(energy_path)?;
 
         let max_energy_range_path = path.as_ref().join("max_energy_range_uj");
-        let max_energy_range_uj = fs::read_to_string(max_energy_range_path)?
+        let max_energy_range_uj = std::fs::read_to_string(max_energy_range_path)?
             .trim()
             .parse::<u64>()
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -34,6 +34,7 @@ impl RaplReader {
             if b == b'\n' {
                 break;
             }
+
             energy_uj = energy_uj * 10 + (b - b'0') as u64;
         }
 
